@@ -1,4 +1,4 @@
-const express = require('express');
+hereconst express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -10,8 +10,11 @@ app.use(cors());
 
 const JWT_SECRET = process.env.JWT_SECRET || "my_super_secret_key";
 
-// إنشاء الجدول تلقائياً في قاعدة البيانات إذا لم يكن موجوداً
+// متغير للتأكد من إنشاء الجدول مرة واحدة فقط
+let dbInitialized = false;
+
 async function initDB() {
+  if (dbInitialized) return;
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -22,15 +25,17 @@ async function initDB() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+    dbInitialized = true;
     console.log("Database initialized successfully.");
   } catch (err) {
     console.error("Database initialization error:", err);
   }
 }
-initDB();
 
 // 1. تسجيل حساب جديد (Register)
 app.post('/register', async (req, res) => {
+  await initDB(); // التأكد من وجود الجدول
+  
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: "اسم المستخدم وكلمة السر مطلوبان" });
@@ -40,19 +45,22 @@ app.post('/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const result = await pool.query(
       'INSERT INTO users (username, password, coins) VALUES ($1, $2, $3) RETURNING id, username, coins',
-      [username, hashedPassword, 100] // 100 عملة هدية تسجيل
+      [username, hashedPassword, 100]
     );
     res.json({ message: "تم إنشاء الحساب بنجاح", user: result.rows[0] });
   } catch (err) {
-    if (err.code === '23505') { // كود الخطأ لاسم المستخدم المكرر
+    console.error("Register Error:", err);
+    if (err.code === '23505') {
       return res.status(400).json({ error: "اسم المستخدم مستخدم بالفعل" });
     }
-    res.status(500).json({ error: "حدث خطأ في السيرفر" });
+    res.status(500).json({ error: "حدث خطأ في السيرفر", details: err.message });
   }
 });
 
 // 2. تسجيل الدخول (Login)
 app.post('/login', async (req, res) => {
+  await initDB();
+  
   const { username, password } = req.body;
   
   try {
@@ -73,7 +81,8 @@ app.post('/login', async (req, res) => {
       user: { id: user.id, username: user.username, coins: user.coins }
     });
   } catch (err) {
-    res.status(500).json({ error: "حدث خطأ في السيرفر" });
+    console.error("Login Error:", err);
+    res.status(500).json({ error: "حدث خطأ في السيرفر", details: err.message });
   }
 });
 
@@ -88,12 +97,18 @@ app.post('/add-coins', async (req, res) => {
     );
     res.json({ message: "تم تحديث الرصيد بنجاح", user: result.rows[0] });
   } catch (err) {
-    res.status(500).json({ error: "حدث خطأ في تحديث الرصيد" });
+    console.error("Add Coins Error:", err);
+    res.status(500).json({ error: "حدث خطأ في تحديث الرصيد", details: err.message });
   }
 });
 
-// تشغيل السيرفر
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+// تصدير التطبيق لبيئة Vercel (مهم جداً)
+module.exports = app;
+
+// تشغيل محلي للتجربة فقط
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
