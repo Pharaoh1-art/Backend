@@ -88,4 +88,14 @@ app.post('/login', async (req, res) => {
   }
 });
 
+// 3. تهيئة اللعبة (تخطي فحص SDK)
+app.post('/sdk/init', (req, res) => {
+  res.status(200).json({
+    code: 200,
+    status: 1,
+    message: "success",
+    data: {}
+  });
+});
+
 module.exports = app;
