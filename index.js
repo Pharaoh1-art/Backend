@@ -35,6 +35,26 @@ async function initDB() {
   }
 }
 
+// ==========================================
+// مسارات فحص وتحديثات اللعبة (Patch & Split)
+// ==========================================
+
+// 1. مسار الـ Patch
+app.get('/RELEASE/1_11_2/android/patch/:filename', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.status(200).send("{}");
+});
+
+// 2. مسار الـ Split
+app.get('/RELEASE/1_11_2/android/split/:filename', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.status(200).send('{"depends":{},"assets":{}}');
+});
+
+// ==========================================
+// مسارات الحسابات والـ API
+// ==========================================
+
 // 1. إنشاء حساب جديد
 app.post('/register', async (req, res) => {
   await initDB();
