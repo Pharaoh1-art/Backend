@@ -5,12 +5,28 @@ const jwt = require('jsonwebtoken');
 const pool = require('./db');
 
 const app = express();
+
+// دعم استقبال البيانات بكافة الصيغ (JSON، Text، URL-encoded)
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.text({ type: '*/*' }));
 app.use(cors());
 
 const JWT_SECRET = process.env.JWT_SECRET || "my_super_secret_key";
 let dbInitialized = false;
 
+// ==========================================
+// 1. طبقة الالتقاط العامة (تظهر لك كل الطلبات في Vercel Logs)
+// ==========================================
+app.use((req, res, next) => {
+  console.log(`[LOG] ${new Date().toISOString()} | ${req.method} -> ${req.url}`);
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.log("[PAYLOAD]:", typeof req.body === 'object' ? JSON.stringify(req.body) : req.body);
+  }
+  next();
+});
+
+// تهيئة قاعدة البيانات
 async function initDB() {
   if (dbInitialized) return;
   try {
@@ -36,26 +52,51 @@ async function initDB() {
 }
 
 // ==========================================
-// مسارات فحص وتحديثات اللعبة (Patch & Split)
+// 2. مسارات فحص SDK وتجاوز التحميل (تحل مشكلة الـ 40%)
 // ==========================================
 
-// 1. مسار الـ Patch
+// مسار تسجيل الدخول الأوتوماتيكي والتهيئة للـ SDK
+app.all(['/user/userLogin', '/api/sdk/userLogin', '/user/init', '/sdk/init', '/user/checkVersion'], (req, res) => {
+  res.status(200).json({
+    code: 200,
+    status: 1,
+    msg: "success",
+    message: "success",
+    data: {
+      uid: "2187278390272",
+      token: "eyJhbGciOiJIUzI1NiJ9.test_token_verified",
+      is_new: 0,
+      accessKey: "69b9065891d246dc9414"
+    }
+  });
+});
+
+// مسار نبض الحياة لمنع فصل اللعبة
+app.all(['/user/heartbeat', '/api/sdk/heartbeat'], (req, res) => {
+  res.status(200).json({
+    code: 200,
+    msg: "ok"
+  });
+});
+
+// ==========================================
+// 3. مسارات فحص وتحديثات اللعبة (Patch & Split)
+// ==========================================
 app.get('/RELEASE/1_11_2/android/patch/:filename', (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.status(200).send("{}");
+  res.setHeader('Content-Type', 'application/json');
+  res.status(200).send("{}");
 });
 
-// 2. مسار الـ Split
 app.get('/RELEASE/1_11_2/android/split/:filename', (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.status(200).send('{"depends":{},"assets":{}}');
+  res.setHeader('Content-Type', 'application/json');
+  res.status(200).send('{"depends":{},"assets":{}}');
 });
 
 // ==========================================
-// مسارات الحسابات والـ API
+// 4. مسارات الحسابات والـ API
 // ==========================================
 
-// 1. إنشاء حساب جديد
+// إنشاء حساب جديد
 app.post('/register', async (req, res) => {
   await initDB();
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
@@ -80,7 +121,7 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// 2. تسجيل الدخول
+// تسجيل الدخول
 app.post('/login', async (req, res) => {
   await initDB();
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
@@ -98,7 +139,6 @@ app.post('/login', async (req, res) => {
       return res.status(400).json({ error: "الاسم أو كلمة السر غير صحيحة!" });
     }
 
-    // تحديث بيانات الدخول (الآي بي، الجهاز، الوقت)
     await pool.query('UPDATE users SET ip_address = $1, device_type = $2, last_login = CURRENT_TIMESTAMP WHERE id = $3', [ip, device_type, user.id]);
 
     const token = jwt.sign({ userId: user.id, username: user.username }, JWT_SECRET);
@@ -108,17 +148,9 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// 3. تهيئة اللعبة (تخطي فحص SDK)
-app.post('/sdk/init', (req, res) => {
-  res.status(200).json({
-    code: 200,
-    status: 1,
-    message: "success",
-    data: {}
-  });
-});
-
-// 4. واجهة تسجيل الدخول (اللي بتظهر جوه اللعبة)
+// ==========================================
+// 5. واجهة تسجيل الدخول المدمجة (تظهر عند طلب الصفحة الرئيسية)
+// ==========================================
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -196,9 +228,7 @@ app.get('/', (req, res) => {
               msgBox.style.color = '#00e676';
               if(isLogin) {
                 msgBox.innerText = 'تم الدخول بنجاح! جاري التوجيه...';
-                // بعد ثانية بنقفل الشاشة عشان اللعبة تفتح
                 setTimeout(() => {
-                   window.location.href = "unity://close"; // أمر وهمي لغلق الشاشة في بعض الألعاب
                    document.body.innerHTML = "<h2 style='text-align:center; color:#00e676; margin-top:50px;'>تم تسجيل الدخول، يمكنك العودة للعبة!</h2>";
                 }, 1500);
               } else {
