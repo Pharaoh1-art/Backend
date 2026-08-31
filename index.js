@@ -63,19 +63,24 @@ async function initDB() {
 }
 
 // ==========================================
-// 2. مسار تهيئة الـ SDK الشامل (حل مشكلة الـ 40% وتكرار الطلب)
+// 2. مسار تهيئة الـ SDK الشامل (محدث لـ QN SDK 1.1.20)
 // ==========================================
 app.all(['/sdk/init', '/api/sdk/init', '/user/init', '/user/checkVersion'], (req, res) => {
   res.status(200).json({
-    code: 0,            // رمز النجاح القياسي للـ SDKs الصينية
-    status: 1,
-    state: 1,
+    code: 200,
+    status: 200,
+    state: 200,
+    success: true,
     msg: "success",
     message: "success",
     data: {
-      code: 0,
+      code: 200,
       status: 1,
-      init: true,
+      state: 1,
+      init: 1,
+      is_init: 1,
+      success: true,
+      appId: "656606",
       server_time: Math.floor(Date.now() / 1000),
       login_url: "https://backend-ecru-delta-39.vercel.app/",
       h5_url: "https://backend-ecru-delta-39.vercel.app/",
@@ -87,7 +92,7 @@ app.all(['/sdk/init', '/api/sdk/init', '/user/init', '/user/checkVersion'], (req
 // مسار طلب الدخول من الـ SDK
 app.all(['/user/userLogin', '/api/sdk/userLogin', '/user/login'], (req, res) => {
   res.status(200).json({
-    code: 0,
+    code: 200,
     status: 1,
     msg: "success",
     data: {
@@ -102,7 +107,7 @@ app.all(['/user/userLogin', '/api/sdk/userLogin', '/user/login'], (req, res) => 
 
 // نبض الحياة
 app.all(['/user/heartbeat', '/api/sdk/heartbeat'], (req, res) => {
-  res.status(200).json({ code: 0, status: 1, msg: "ok" });
+  res.status(200).json({ code: 200, status: 1, msg: "ok" });
 });
 
 // ==========================================
