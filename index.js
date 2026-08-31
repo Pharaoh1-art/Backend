@@ -76,7 +76,7 @@ function sendBase64Response(res, dataObject) {
 }
 
 // ==========================================
-// 2. كائن الرد الموحد للـ SDK
+// 2. كائن الرد الموحد للـ SDK (تم تحديث الروابط لـ login.html)
 // ==========================================
 const initSdkData = {
   code: 200,
@@ -91,9 +91,9 @@ const initSdkData = {
     updateBaseVersion: "1.1.20",
     appId: "656606",
     server_time: Math.floor(Date.now() / 1000),
-    login_url: "https://backend-ecru-delta-39.vercel.app/",
-    h5_url: "https://backend-ecru-delta-39.vercel.app/",
-    url: "https://backend-ecru-delta-39.vercel.app/"
+    login_url: "https://backend-ecru-delta-39.vercel.app/login.html",
+    h5_url: "https://backend-ecru-delta-39.vercel.app/login.html",
+    url: "https://backend-ecru-delta-39.vercel.app/login.html"
   }
 };
 
@@ -113,7 +113,7 @@ app.all(['/user/userLogin', '/api/sdk/userLogin', '/user/login'], (req, res) => 
       token: "eyJhbGciOiJIUzI1NiJ9.test_token_verified",
       is_new: 0,
       accessKey: "69b9065891d246dc9414",
-      login_url: "https://backend-ecru-delta-39.vercel.app/"
+      login_url: "https://backend-ecru-delta-39.vercel.app/login.html"
     }
   };
 
@@ -191,9 +191,7 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// ==========================================
-// 5. استدعاء ملف صفحة تسجيل الدخول المنفصل
-// ==========================================
+// مسار احتياطي للوصول لصفحة التسجيل
 app.get('/login-page', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
