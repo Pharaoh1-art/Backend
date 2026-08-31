@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const path = require('path');
 const pool = require('./db');
 
 const app = express();
@@ -12,30 +11,124 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.text({ type: '*/*' }));
 app.use(cors());
 
-// تقديم الملفات الستاتيكية من مجلد public
-app.use(express.static(path.join(__dirname, 'public')));
-
 const JWT_SECRET = process.env.JWT_SECRET || "my_super_secret_key";
 let dbInitialized = false;
 
 // ==========================================
-// 1. طبقة الالتقاط العامة + فك تشفير Payload
+// 1. كود صفحة تسجيل الدخول (HTML)
+// ==========================================
+const loginPageHtml = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>تسجيل الدخول</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: rgba(0,0,0,0.85); margin: 0; color: white; }
+    .login-box { background: #1e1e1e; padding: 25px; border-radius: 12px; width: 85%; max-width: 320px; text-align: center; box-shadow: 0 8px 20px rgba(0,0,0,0.8); border: 2px solid #333; }
+    h2 { margin-top: 0; color: #ff9800; font-size: 24px; }
+    input { width: 100%; padding: 12px; margin: 10px 0; border-radius: 8px; border: 1px solid #555; background: #2a2a2a; color: white; font-size: 16px; outline: none; box-sizing: border-box; }
+    input:focus { border-color: #ff9800; }
+    button { width: 100%; padding: 12px; background: #ff9800; color: #000; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 15px; box-sizing: border-box; transition: 0.3s;}
+    button:hover { background: #e68a00; }
+    .toggle { margin-top: 20px; font-size: 14px; color: #bbb; cursor: pointer; text-decoration: underline; }
+    #msg { margin-top: 15px; font-weight: bold; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <h2 id="title">تسجيل الدخول</h2>
+    <input type="text" id="username" placeholder="اسم المستخدم (إنجليزي)">
+    <input type="password" id="password" placeholder="كلمة السر">
+    <input type="email" id="email" placeholder="البريد الإلكتروني" style="display: none;">
+    
+    <button onclick="submitForm()" id="submitBtn">دخول</button>
+    <div class="toggle" onclick="toggleMode()" id="toggleBtn">ليس لديك حساب؟ إنشاء حساب جديد</div>
+    <div id="msg"></div>
+  </div>
+
+  <script>
+    let isLogin = true;
+    
+    function toggleMode() {
+      isLogin = !isLogin;
+      document.getElementById('title').innerText = isLogin ? 'تسجيل الدخول' : 'إنشاء حساب جديد';
+      document.getElementById('submitBtn').innerText = isLogin ? 'دخول' : 'تسجيل';
+      document.getElementById('toggleBtn').innerText = isLogin ? 'لديك حساب بالفعل؟ تسجيل الدخول' : 'ليس لديك حساب؟ إنشاء حساب جديد';
+      document.getElementById('email').style.display = isLogin ? 'none' : 'inline-block';
+      document.getElementById('msg').innerText = '';
+    }
+
+    async function submitForm() {
+      const u = document.getElementById('username').value;
+      const p = document.getElementById('password').value;
+      const e = document.getElementById('email').value;
+      const btn = document.getElementById('submitBtn');
+      const msgBox = document.getElementById('msg');
+      
+      if(!u || !p || (!isLogin && !e)) {
+        msgBox.style.color = '#ff4d4d';
+        msgBox.innerText = 'برجاء ملء جميع الحقول المطلوبة';
+        return;
+      }
+      
+      btn.disabled = true;
+      btn.innerText = 'جاري التحميل...';
+      
+      const endpoint = isLogin ? '/login' : '/register';
+      const body = isLogin ? 
+        { username: u, password: p, device_type: "android" } : 
+        { username: u, password: p, email: e, device_type: "android", birth_date: "2000-01-01" };
+      
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        
+        if(res.ok) {
+          msgBox.style.color = '#00e676';
+          if(isLogin) {
+            msgBox.innerText = 'تم الدخول بنجاح!';
+            setTimeout(() => {
+               document.body.innerHTML = "<h2 style='text-align:center; color:#00e676; margin-top:50px;'>تم تسجيل الدخول، يمكنك العودة للعبة الآن!</h2>";
+            }, 1000);
+          } else {
+            msgBox.innerText = 'تم إنشاء الحساب بنجاح! قم بتسجيل الدخول الآن.';
+            setTimeout(toggleMode, 1500);
+          }
+        } else {
+          msgBox.style.color = '#ff4d4d';
+          msgBox.innerText = data.error || 'حدث خطأ';
+        }
+      } catch(err) {
+        msgBox.style.color = '#ff4d4d';
+        msgBox.innerText = 'خطأ في الاتصال بالسيرفر';
+      }
+      btn.disabled = false;
+      btn.innerText = isLogin ? 'دخول' : 'تسجيل';
+    }
+  </script>
+</body>
+</html>
+`;
+
+// ==========================================
+// 2. طبقة الالتقاط العامة + فك تشفير Payload
 // ==========================================
 app.use((req, res, next) => {
   console.log(`[LOG] ${new Date().toISOString()} | ${req.method} -> ${req.url}`);
-  
   if (req.body) {
     let bodyStr = typeof req.body === 'object' ? JSON.stringify(req.body) : req.body;
-    console.log("[PAYLOAD RAW]:", bodyStr);
-
     try {
       if (typeof bodyStr === 'string' && bodyStr.startsWith('ey')) {
         const decoded = Buffer.from(bodyStr, 'base64').toString('utf-8');
         console.log("[DECODED PAYLOAD]:", decoded);
       }
-    } catch (e) {
-      // تجاهل إذا لم يكن Base64
-    }
+    } catch (e) {}
   }
   next();
 });
@@ -59,15 +152,11 @@ async function initDB() {
       );
     `);
     dbInitialized = true;
-    console.log("Database initialized successfully.");
   } catch (err) {
     console.error("Database initialization error:", err);
   }
 }
 
-// ==========================================
-// دالة مساعدة لتشفير الرد بـ Base64
-// ==========================================
 function sendBase64Response(res, dataObject) {
   const jsonString = JSON.stringify(dataObject);
   const base64String = Buffer.from(jsonString, 'utf-8').toString('base64');
@@ -76,7 +165,15 @@ function sendBase64Response(res, dataObject) {
 }
 
 // ==========================================
-// 2. كائن الرد الموحد للـ SDK (تم تحديث الروابط لـ login.html)
+// 3. توجيه المتصفح (GET) لصفحة الدخول
+// ==========================================
+app.get(['/', '/login-page', '/login.html'], (req, res) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.status(200).send(loginPageHtml);
+});
+
+// ==========================================
+// 4. مسارات الـ SDK الخاصة باللعبة (POST / Init)
 // ==========================================
 const initSdkData = {
   code: 200,
@@ -91,20 +188,18 @@ const initSdkData = {
     updateBaseVersion: "1.1.20",
     appId: "656606",
     server_time: Math.floor(Date.now() / 1000),
-    login_url: "https://backend-ecru-delta-39.vercel.app/login.html",
-    h5_url: "https://backend-ecru-delta-39.vercel.app/login.html",
-    url: "https://backend-ecru-delta-39.vercel.app/login.html"
+    login_url: "https://backend-ecru-delta-39.vercel.app/login-page",
+    h5_url: "https://backend-ecru-delta-39.vercel.app/login-page",
+    url: "https://backend-ecru-delta-39.vercel.app/login-page"
   }
 };
 
-// التعامل مع جميع مسارات الـ Init بما فيها المسار الرئيسي /
-app.all(['/', '/sdk/init', '/api/sdk/init', '/user/init', '/user/checkVersion'], (req, res) => {
+app.post(['/', '/sdk/init', '/api/sdk/init', '/user/init', '/user/checkVersion'], (req, res) => {
   sendBase64Response(res, initSdkData);
 });
 
-// مسار طلب الدخول من الـ SDK
 app.all(['/user/userLogin', '/api/sdk/userLogin', '/user/login'], (req, res) => {
-  const responseData = {
+  sendBase64Response(res, {
     code: 200,
     status: 1,
     msg: "success",
@@ -113,20 +208,17 @@ app.all(['/user/userLogin', '/api/sdk/userLogin', '/user/login'], (req, res) => 
       token: "eyJhbGciOiJIUzI1NiJ9.test_token_verified",
       is_new: 0,
       accessKey: "69b9065891d246dc9414",
-      login_url: "https://backend-ecru-delta-39.vercel.app/login.html"
+      login_url: "https://backend-ecru-delta-39.vercel.app/login-page"
     }
-  };
-
-  sendBase64Response(res, responseData);
+  });
 });
 
-// نبض الحياة
 app.all(['/user/heartbeat', '/api/sdk/heartbeat'], (req, res) => {
   sendBase64Response(res, { code: 200, status: 1, msg: "ok" });
 });
 
 // ==========================================
-// 3. مسارات فحص وتحديثات اللعبة
+// 5. مسارات تحديثات اللعبة
 // ==========================================
 app.get('/RELEASE/1_11_2/android/patch/:filename', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
@@ -139,7 +231,7 @@ app.get('/RELEASE/1_11_2/android/split/:filename', (req, res) => {
 });
 
 // ==========================================
-// 4. مسارات الحسابات والـ API
+// 6. مسارات الحسابات والـ API
 // ==========================================
 app.post('/register', async (req, res) => {
   await initDB();
@@ -159,7 +251,7 @@ app.post('/register', async (req, res) => {
     res.json({ message: "تم إنشاء الحساب بنجاح!", user: result.rows[0] });
   } catch (err) {
     if (err.code === '23505') {
-      return res.status(400).json({ error: "اسم المستخدم أو الإيميل مستخدم بالفعل، جرب اسماً آخر." });
+      return res.status(400).json({ error: "اسم المستخدم أو الإيميل مستخدم بالفعل." });
     }
     res.status(500).json({ error: "حدث خطأ في السيرفر أثناء التسجيل." });
   }
@@ -189,11 +281,6 @@ app.post('/login', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: "حدث خطأ في السيرفر أثناء تسجيل الدخول." });
   }
-});
-
-// مسار احتياطي للوصول لصفحة التسجيل
-app.get('/login-page', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
 module.exports = app;
