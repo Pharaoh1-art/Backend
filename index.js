@@ -63,28 +63,21 @@ async function initDB() {
 }
 
 // ==========================================
-// 2. مسار تهيئة الـ SDK الشامل (محدث مع إرجاع deviceKey)
+// 2. مسار تهيئة الـ SDK الشامل (مطابق تماماً لـ QNApiFactory$2)
 // ==========================================
 app.all(['/sdk/init', '/api/sdk/init', '/user/init', '/user/checkVersion'], (req, res) => {
   res.status(200).json({
     code: 200,
-    status: 200,
-    state: 200,
-    success: true,
     msg: "success",
     message: "success",
-    deviceKey: "qn_device_key_888888",
-    device_key: "qn_device_key_888888",
     data: {
-      code: 200,
-      status: 1,
-      state: 1,
-      init: 1,
-      is_init: 1,
-      success: true,
-      appId: "656606",
       deviceKey: "qn_device_key_888888",
-      device_key: "qn_device_key_888888",
+      appVersion: "1.1.20",
+      appUrl: "",
+      registerStatus: 1,
+      updateBaseUrl: "",
+      updateBaseVersion: "1.1.20",
+      appId: "656606",
       server_time: Math.floor(Date.now() / 1000),
       login_url: "https://backend-ecru-delta-39.vercel.app/",
       h5_url: "https://backend-ecru-delta-39.vercel.app/",
