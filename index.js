@@ -24,7 +24,6 @@ app.use((req, res, next) => {
     let bodyStr = typeof req.body === 'object' ? JSON.stringify(req.body) : req.body;
     console.log("[PAYLOAD RAW]:", bodyStr);
 
-    // فك تشفير النص إذا كان القادم Base64 لطباعته في Vercel Logs
     try {
       if (typeof bodyStr === 'string' && bodyStr.startsWith('ey')) {
         const decoded = Buffer.from(bodyStr, 'base64').toString('utf-8');
@@ -63,10 +62,20 @@ async function initDB() {
 }
 
 // ==========================================
-// 2. مسار تهيئة الـ SDK الشامل (مطابق تماماً لـ QNApiFactory$2)
+// دالة مساعدة لتشفير الرد بـ Base64
+// ==========================================
+function sendBase64Response(res, dataObject) {
+  const jsonString = JSON.stringify(dataObject);
+  const base64String = Buffer.from(jsonString, 'utf-8').toString('base64');
+  res.setHeader('Content-Type', 'text/plain');
+  return res.status(200).send(base64String);
+}
+
+// ==========================================
+// 2. مسار تهيئة الـ SDK الشامل (رد مشفر بـ Base64)
 // ==========================================
 app.all(['/sdk/init', '/api/sdk/init', '/user/init', '/user/checkVersion'], (req, res) => {
-  res.status(200).json({
+  const responseData = {
     code: 200,
     msg: "success",
     message: "success",
@@ -83,12 +92,14 @@ app.all(['/sdk/init', '/api/sdk/init', '/user/init', '/user/checkVersion'], (req
       h5_url: "https://backend-ecru-delta-39.vercel.app/",
       url: "https://backend-ecru-delta-39.vercel.app/"
     }
-  });
+  };
+
+  sendBase64Response(res, responseData);
 });
 
-// مسار طلب الدخول من الـ SDK
+// مسار طلب الدخول من الـ SDK (رد مشفر بـ Base64)
 app.all(['/user/userLogin', '/api/sdk/userLogin', '/user/login'], (req, res) => {
-  res.status(200).json({
+  const responseData = {
     code: 200,
     status: 1,
     msg: "success",
@@ -99,12 +110,14 @@ app.all(['/user/userLogin', '/api/sdk/userLogin', '/user/login'], (req, res) => 
       accessKey: "69b9065891d246dc9414",
       login_url: "https://backend-ecru-delta-39.vercel.app/"
     }
-  });
+  };
+
+  sendBase64Response(res, responseData);
 });
 
 // نبض الحياة
 app.all(['/user/heartbeat', '/api/sdk/heartbeat'], (req, res) => {
-  res.status(200).json({ code: 200, status: 1, msg: "ok" });
+  sendBase64Response(res, { code: 200, status: 1, msg: "ok" });
 });
 
 // ==========================================
