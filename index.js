@@ -6,7 +6,6 @@ const pool = require('./db');
 
 const app = express();
 
-// دعم استقبال البيانات بكافة الصيغ (JSON، Text، URL-encoded)
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.text({ type: '*/*' }));
@@ -16,12 +15,24 @@ const JWT_SECRET = process.env.JWT_SECRET || "my_super_secret_key";
 let dbInitialized = false;
 
 // ==========================================
-// 1. طبقة الالتقاط العامة (تظهر لك كل الطلبات في Vercel Logs)
+// 1. طبقة الالتقاط العامة + فك تشفير Payload
 // ==========================================
 app.use((req, res, next) => {
   console.log(`[LOG] ${new Date().toISOString()} | ${req.method} -> ${req.url}`);
-  if (req.body && Object.keys(req.body).length > 0) {
-    console.log("[PAYLOAD]:", typeof req.body === 'object' ? JSON.stringify(req.body) : req.body);
+  
+  if (req.body) {
+    let bodyStr = typeof req.body === 'object' ? JSON.stringify(req.body) : req.body;
+    console.log("[PAYLOAD RAW]:", bodyStr);
+
+    // فك تشفير النص إذا كان القادم Base64 لطباعته في Vercel Logs
+    try {
+      if (typeof bodyStr === 'string' && bodyStr.startsWith('ey')) {
+        const decoded = Buffer.from(bodyStr, 'base64').toString('utf-8');
+        console.log("[DECODED PAYLOAD]:", decoded);
+      }
+    } catch (e) {
+      // تجاهل إذا لم يكن Base64
+    }
   }
   next();
 });
@@ -52,35 +63,50 @@ async function initDB() {
 }
 
 // ==========================================
-// 2. مسارات فحص SDK وتجاوز التحميل (تحل مشكلة الـ 40%)
+// 2. مسار تهيئة الـ SDK الشامل (حل مشكلة الـ 40% وتكرار الطلب)
 // ==========================================
-
-// مسار تسجيل الدخول الأوتوماتيكي والتهيئة للـ SDK
-app.all(['/user/userLogin', '/api/sdk/userLogin', '/user/init', '/sdk/init', '/user/checkVersion'], (req, res) => {
+app.all(['/sdk/init', '/api/sdk/init', '/user/init', '/user/checkVersion'], (req, res) => {
   res.status(200).json({
-    code: 200,
+    code: 0,            // رمز النجاح القياسي للـ SDKs الصينية
     status: 1,
+    state: 1,
     msg: "success",
     message: "success",
     data: {
-      uid: "2187278390272",
-      token: "eyJhbGciOiJIUzI1NiJ9.test_token_verified",
-      is_new: 0,
-      accessKey: "69b9065891d246dc9414"
+      code: 0,
+      status: 1,
+      init: true,
+      server_time: Math.floor(Date.now() / 1000),
+      login_url: "https://backend-ecru-delta-39.vercel.app/",
+      h5_url: "https://backend-ecru-delta-39.vercel.app/",
+      url: "https://backend-ecru-delta-39.vercel.app/"
     }
   });
 });
 
-// مسار نبض الحياة لمنع فصل اللعبة
-app.all(['/user/heartbeat', '/api/sdk/heartbeat'], (req, res) => {
+// مسار طلب الدخول من الـ SDK
+app.all(['/user/userLogin', '/api/sdk/userLogin', '/user/login'], (req, res) => {
   res.status(200).json({
-    code: 200,
-    msg: "ok"
+    code: 0,
+    status: 1,
+    msg: "success",
+    data: {
+      uid: "2187278390272",
+      token: "eyJhbGciOiJIUzI1NiJ9.test_token_verified",
+      is_new: 0,
+      accessKey: "69b9065891d246dc9414",
+      login_url: "https://backend-ecru-delta-39.vercel.app/"
+    }
   });
 });
 
+// نبض الحياة
+app.all(['/user/heartbeat', '/api/sdk/heartbeat'], (req, res) => {
+  res.status(200).json({ code: 0, status: 1, msg: "ok" });
+});
+
 // ==========================================
-// 3. مسارات فحص وتحديثات اللعبة (Patch & Split)
+// 3. مسارات فحص وتحديثات اللعبة
 // ==========================================
 app.get('/RELEASE/1_11_2/android/patch/:filename', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
@@ -95,8 +121,6 @@ app.get('/RELEASE/1_11_2/android/split/:filename', (req, res) => {
 // ==========================================
 // 4. مسارات الحسابات والـ API
 // ==========================================
-
-// إنشاء حساب جديد
 app.post('/register', async (req, res) => {
   await initDB();
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
@@ -121,7 +145,6 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// تسجيل الدخول
 app.post('/login', async (req, res) => {
   await initDB();
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
@@ -149,7 +172,7 @@ app.post('/login', async (req, res) => {
 });
 
 // ==========================================
-// 5. واجهة تسجيل الدخول المدمجة (تظهر عند طلب الصفحة الرئيسية)
+// 5. واجهة تسجيل الدخول المدمجة
 // ==========================================
 app.get('/', (req, res) => {
   res.send(`
